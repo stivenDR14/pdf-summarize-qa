@@ -1,0 +1,14 @@
+#ignore env variables
+.env
+
+#ignore pycache folder and all files in it
+__pycache__
+
+#ignore chroma_db folder
+chroma_db
+
+#ignore ollama folder
+ollama
+
+#ignore llama_index folder
+llama_index

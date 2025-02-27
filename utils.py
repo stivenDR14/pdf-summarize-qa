@@ -1,6 +1,19 @@
+AI_MODELS = {
+    "Huggingface / IBM granite granite 3.1 8b Instruct": "ibm-granite/granite-3.1-8b-instruct",
+    "Huggingface / Mistral Small 24B Instruct": "mistralai/Mistral-Small-24B-Instruct-2501",
+    "Huggingface / SmolLM2 1.7B Instruct": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+    "IBM Granite3.1 dense / Ollama local": "ollama",
+    "Open AI / GPT-4o-mini": "openai",    
+}
+
 TRANSLATIONS = {
     "Español": {
         "title": "# 📚 Procesador de PDF con QA y Resumen",
+        "api_key_required": "Para usar este modelo, necesitas una clave de API.",
+        "model_type": "Tipo de modelo",
+        "api_key_placeholder": "Ingresa tu clave de API",
+        "project_id_placeholder": "Ingresa tu ID de proyecto",
+        "ai_model": "Modelo AI",
         "upload_pdf": "Cargar PDF",
         "upload_images": "Cargar imágenes",
         "chunk_size": "Tamaño de chunk",
@@ -10,7 +23,7 @@ TRANSLATIONS = {
         "qa_tab": "Preguntas y Respuestas",
         "summary_tab": "Resumen",
         "chat_placeholder": "Haz una pregunta sobre el documento...",
-        "chat_title": "Chat con el documento",
+        "chat_title": "Pregunta al documento",
         "generate_summary": "Generar Resumen",
         "summary_label": "Resumen del documento",
         "pdf_processed": "PDF procesado y almacenado correctamente",
@@ -24,6 +37,11 @@ TRANSLATIONS = {
     },
     "English": {
         "title": "# 📚 PDF Processor with QA and Summary",
+        "api_key_required": "To use this model, you need an API key.",
+        "model_type": "Model type",
+        "api_key_placeholder": "Enter your API key",
+        "project_id_placeholder": "Enter your project ID",
+        "ai_model": "AI Model",
         "upload_pdf": "Upload PDF",
         "upload_images": "Upload Images",
         "chunk_size": "Chunk size",
@@ -33,7 +51,7 @@ TRANSLATIONS = {
         "qa_tab": "Questions and Answers",
         "summary_tab": "Summary",
         "chat_placeholder": "Ask a question about the document...",
-        "chat_title": "Chat with document",
+        "chat_title": "Question to document",
         "generate_summary": "Generate Summary",
         "summary_label": "Document summary",
         "pdf_processed": "PDF processed and stored successfully",
@@ -47,6 +65,11 @@ TRANSLATIONS = {
     },
     "Deutsch": {
         "title": "# 📚 PDF-Prozessor mit Q&A und Zusammenfassung",
+        "model_type": "Modelltyp",
+        "api_key_required": "Um dieses Modell zu verwenden, benötigen Sie einen API-Schlüssel.",
+        "api_key_placeholder": "API-Schlüssel eingeben",
+        "project_id_placeholder": "Projekt-ID eingeben",
+        "ai_model": "AI-Modell",
         "upload_pdf": "PDF hochladen",
         "upload_images": "Bilder hochladen",
         "chunk_size": "Chunk-Größe",
@@ -56,7 +79,7 @@ TRANSLATIONS = {
         "qa_tab": "Fragen und Antworten",
         "summary_tab": "Zusammenfassung",
         "chat_placeholder": "Stellen Sie eine Frage zum Dokument...",
-        "chat_title": "Chat mit Dokument",
+        "chat_title": "Frage zum Dokument",
         "generate_summary": "Zusammenfassung generieren",
         "summary_label": "Dokumentzusammenfassung",
         "pdf_processed": "PDF erfolgreich verarbeitet und gespeichert",
@@ -70,6 +93,11 @@ TRANSLATIONS = {
     },
     "Français": {
         "title": "# 📚 Processeur PDF avec QR et Résumé", 
+        "model_type": "Type de modèle",
+        "api_key_required": "Pour utiliser ce modèle, vous avez besoin d'une clé API.",
+        "api_key_placeholder": "Entrez votre clé API",
+        "project_id_placeholder": "Entrez votre ID de projet",
+        "ai_model": "Modèle AI",
         "upload_pdf": "Charger PDF",
         "upload_images": "Charger images",
         "chunk_size": "Taille du chunk",
@@ -79,7 +107,7 @@ TRANSLATIONS = {
         "qa_tab": "Questions et Réponses",
         "summary_tab": "Résumé",
         "chat_placeholder": "Posez une question sur le document...",
-        "chat_title": "Chat avec le document",
+        "chat_title": "Question au document",
         "generate_summary": "Générer le résumé",
         "summary_label": "Résumé du document",
         "pdf_processed": "PDF traité et enregistré avec succès",
@@ -93,6 +121,11 @@ TRANSLATIONS = {
     },
     "Português": {
         "title": "# 📚 Processador de PDF com P&R e Resumo",
+        "model_type": "Tipo de modelo",
+        "api_key_required": "Para usar este modelo, necesitas una clave de API.",
+        "api_key_placeholder": "Digite sua chave API",
+        "project_id_placeholder": "Digite seu ID de projeto",
+        "ai_model": "Modelo AI",
         "upload_pdf": "Carregar PDF",
         "upload_images": "Carregar imagens",
         "chunk_size": "Tamanho do chunk",
@@ -102,7 +135,7 @@ TRANSLATIONS = {
         "qa_tab": "Perguntas e Respostas",
         "summary_tab": "Resumo",
         "chat_placeholder": "Faça uma pergunta sobre o documento...",
-        "chat_title": "Chat com o documento",
+        "chat_title": "Pergunta ao documento",
         "generate_summary": "Gerar Resumo",
         "summary_label": "Resumo do documento",
         "pdf_processed": "PDF processado e armazenado com sucesso",
@@ -115,85 +148,3 @@ TRANSLATIONS = {
         RESUMO DETALHADO:"""
     }
 } 
-
-
-
-
-punctuation_dict = {
-    "，": ",",
-    "。": ".",
-}
-translation_table = str.maketrans(punctuation_dict)
-stop_str = "<|im_end|>"
-
-def render_ocr_text(text, result_path, format_text=False):
-    if text.endswith(stop_str):
-        text = text[: -len(stop_str)]
-    text = text.strip()
-
-    print(text)
-
-    if format_text and "**kern" not in text:
-        if "\\begin{tikzpicture}" not in text:
-            html_path = "./render_tools/" + "/content-mmd-to-html.html"
-            right_num = text.count("\\right")
-            left_num = text.count("\left")
-
-            if right_num != left_num:
-                text = (
-                    text.replace("\left(", "(")
-                    .replace("\\right)", ")")
-                    .replace("\left[", "[")
-                    .replace("\\right]", "]")
-                    .replace("\left{", "{")
-                    .replace("\\right}", "}")
-                    .replace("\left|", "|")
-                    .replace("\\right|", "|")
-                    .replace("\left.", ".")
-                    .replace("\\right.", ".")
-                )
-
-            text = text.replace('"', "``").replace("$", "")
-
-            outputs_list = text.split("\n")
-            gt = ""
-            for out in outputs_list:
-                gt += '"' + out.replace("\\", "\\\\") + r"\n" + '"' + "+" + "\n"
-
-            gt = gt[:-2]
-
-            with open(html_path, "r") as web_f:
-                lines = web_f.read()
-                lines = lines.split("const text =")
-                new_web = lines[0] + "const text =" + gt + lines[1]
-        else:
-            html_path = "./render_tools/" + "/tikz.html"
-            text = text.translate(translation_table)
-            outputs_list = text.split("\n")
-            gt = ""
-            for out in outputs_list:
-                if out:
-                    if (
-                        "\\begin{tikzpicture}" not in out
-                        and "\\end{tikzpicture}" not in out
-                    ):
-                        while out[-1] == " ":
-                            out = out[:-1]
-                            if out is None:
-                                break
-
-                        if out:
-                            if out[-1] != ";":
-                                gt += out[:-1] + ";\n"
-                            else:
-                                gt += out + "\n"
-                    else:
-                        gt += out + "\n"
-
-            with open(html_path, "r") as web_f:
-                lines = web_f.read()
-                lines = lines.split("const text =")
-                new_web = lines[0] + gt + lines[1]
-
-        with open(result_path, "w") as web_f_new:
-            web_f_new.write(new_web)
