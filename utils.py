@@ -33,7 +33,14 @@ TRANSLATIONS = {
         RESUMEN CONCISO:""",
         "combine_prompt": """Escribe un resumen detallado basado en los siguientes resúmenes de diferentes secciones del texto:
         "{text}"
-        RESUMEN DETALLADO:"""
+        RESUMEN DETALLADO:""",
+        "mini_summary_title": "Resúmenes de cada fragmento",
+        "mini_analysis_title": "Análisis de cada fragmento",
+        "specialist_tab": "Asesor a tu medida",
+        "specialist_title": "Asesor a tu medida",
+        "specialist_label": "Establece el comportamiento y rol de tu asesor. Ej: Eres un especialista de finanzas que ayuda a interpretar los datos de un reporte financiero. A partir del documento y tu basta experiencia cuéntame que oportunidades y riesgos ves al invertir en lo que te proponen.",
+        "specialist_output": "Respuesta de tu asesor",
+        "specialist_btn": "Generar Respuesta"
     },
     "English": {
         "title": "# 📚 PDF Processor with QA and Summary",
@@ -61,7 +68,14 @@ TRANSLATIONS = {
         CONCISE SUMMARY:""",
         "combine_prompt": """Write a detailed summary based on the following summaries from different sections of the text:
         "{text}"
-        DETAILED SUMMARY:"""
+        DETAILED SUMMARY:""",
+        "mini_summary_title": "Summaries of each fragment",
+        "mini_analysis_title": "Analysis of each fragment",
+        "specialist_tab": "Customized Advisor",
+        "specialist_title": "Customized Advisor",
+        "specialist_label": "Set the behavior and role of your advisor. Example: You are a financial expert who helps interpret the data of a financial report. Based on the document and your extensive experience, tell me what opportunities and risks you see in what they propose.",
+        "specialist_output": "Answer of your advisor",
+        "specialist_btn": "Generate Answer"
     },
     "Deutsch": {
         "title": "# 📚 PDF-Prozessor mit Q&A und Zusammenfassung",
@@ -89,7 +103,14 @@ TRANSLATIONS = {
         KURZE ZUSAMMENFASSUNG:""",
         "combine_prompt": """Schreiben Sie eine detaillierte Zusammenfassung basierend auf den folgenden Zusammenfassungen verschiedener Textabschnitte:
         "{text}"
-        DETAILLIERTE ZUSAMMENFASSUNG:"""
+        DETAILLIERTE ZUSAMMENFASSUNG:""",
+        "mini_summary_title": "Zusammenfassungen von jedem Fragment",
+        "mini_analysis_title": "Analyse von jedem Fragment",
+        "specialist_tab": "Anpassbarer Berater",
+        "specialist_title": "Anpassbarer Berater",
+        "specialist_label": "Setzen Sie das Verhalten und die Rolle Ihres Beraters fest. Beispiel: Sie sind ein Finanzexperte, der bei der Interpretation von Finanzdaten aus einem Bericht hilft. Basierend auf dem Dokument und Ihrer umfassenden Erfahrung, erzählen Sie mir, was Sie in dem sehen, was sie Ihnen vorschlagen.",
+        "specialist_output": "Antwort Ihres Beraters",
+        "specialist_btn": "Antwort generieren"
     },
     "Français": {
         "title": "# 📚 Processeur PDF avec QR et Résumé", 
@@ -117,7 +138,14 @@ TRANSLATIONS = {
         RÉSUMÉ CONCIS :""",
         "combine_prompt": """Écrivez un résumé détaillé basé sur les résumés suivants de différentes sections du texte :
         "{text}"
-        RÉSUMÉ DÉTAILLÉ :"""
+        RÉSUMÉ DÉTAILLÉ :""",
+        "mini_summary_title": "Résumés de chaque fragment",
+        "mini_analysis_title": "Analyse de chaque fragment",
+        "specialist_tab": "Conseiller personnalisé",
+        "specialist_title": "Conseiller personnalisé",
+        "specialist_label": "Définissez le comportement et le rôle de votre conseiller. Exemple : Vous êtes un expert financier qui aide à interpréter les données d'un rapport financier. Basé sur le document et votre vaste expérience, partagez-moi ce que vous voyez dans ce qu'ils vous proposent.",
+        "specialist_output": "Réponse de votre conseiller",
+        "specialist_btn": "Générer la réponse"
     },
     "Português": {
         "title": "# 📚 Processador de PDF com P&R e Resumo",
@@ -145,6 +173,13 @@ TRANSLATIONS = {
         RESUMO CONCISO:""",
         "combine_prompt": """Escreva um resumo detalhado baseado nos seguintes resumos de diferentes seções do texto:
         "{text}"
-        RESUMO DETALHADO:"""
+        RESUMO DETALHADO:""",
+        "mini_summary_title": "Resúmenes de cada fragmento",
+        "mini_analysis_title": "Análisis de cada fragmento",
+        "specialist_tab": "Assistente Personalizado",
+        "specialist_title": "Assistente Personalizado",
+        "specialist_label": "Defina o comportamento e o papel do seu assistente. Exemplo: Você é um especialista em finanças que ajuda a interpretar os dados de um relatório financeiro. Com base no documento e em sua ampla experiência, compartilhe comigo o que você vê naquilo que eles lhe propõem.",
+        "specialist_output": "Resposta do seu assistente",
+        "specialist_btn": "Gerar Resposta"
     }
 } 

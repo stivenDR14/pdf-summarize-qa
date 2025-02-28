@@ -23,27 +23,33 @@ class PDFProcessorUI:
             gr.update(label=TRANSLATIONS[language]["processing_status"]),
             gr.update(label=TRANSLATIONS[language]["qa_tab"]),
             gr.update(label=TRANSLATIONS[language]["summary_tab"]),
+            gr.update(label=TRANSLATIONS[language]["specialist_tab"]),
+            gr.update(label=TRANSLATIONS[language]["mini_summary_title"]),
+            gr.update(label=TRANSLATIONS[language]["mini_analysis_title"]),
             gr.update(placeholder=TRANSLATIONS[language]["chat_placeholder"]),
             TRANSLATIONS[language]["chat_title"],
             gr.update(value=TRANSLATIONS[language]["generate_summary"]),
             gr.update(label=TRANSLATIONS[language]["summary_label"]),
-            gr.update(label=TRANSLATIONS[language]["ai_model"])
+            gr.update(label=TRANSLATIONS[language]["ai_model"]),
+            gr.update(label=TRANSLATIONS[language]["specialist_title"]),
+            gr.update(label=TRANSLATIONS[language]["specialist_label"]),
+            gr.update(label=TRANSLATIONS[language]["specialist_output"])
         ]
     
     def change_ai_model(self, ai_model):
         self.current_ai_model = ai_model
         if ai_model == "IBM Granite3.1 dense / Ollama local":
-            return gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
+            return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, maximum=2048), gr.update(visible=True, maximum=200)
         elif ai_model == "Open AI / GPT-4o-mini":
-            return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+            return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True, maximum=2048), gr.update(visible=True, maximum=200)
         else:
-            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, maximum=500), gr.update(visible=True, maximum=100)
     
     def change_type_model(self, type_model):
         self.current_type_model = type_model
         if type_model == "Api Key":
             if self.current_ai_model == "IBM Granite3.1 dense / Ollama local":
-                return gr.update(visible=True), gr.update(visible=True)
+                return gr.update(visible=False), gr.update(visible=False)
             else:
                 return gr.update(visible=True), gr.update(visible=False)
         else:
@@ -58,7 +64,9 @@ class PDFProcessorUI:
     def summarize_interface(self, ai_model, type_model, api_key, project_id_watsonx):
         return self.processor.get_summary(ai_model, type_model, api_key, project_id_watsonx)
     
-
+    def specialist_opinion(self, ai_model, type_model, api_key, project_id_watsonx, specialist_prompt):
+        return self.processor.get_specialist_opinion(ai_model, type_model, api_key, project_id_watsonx, specialist_prompt)
+    
     def upload_file(files):
         file_paths = [file.name for file in files]
         return file_paths[0]
@@ -116,7 +124,7 @@ class PDFProcessorUI:
             with gr.Tabs() as tabs:
                 qa_tab = gr.Tab(TRANSLATIONS[self.current_language]["qa_tab"])
                 summary_tab = gr.Tab(TRANSLATIONS[self.current_language]["summary_tab"])
-            
+                specialist_tab = gr.Tab(TRANSLATIONS[self.current_language]["specialist_tab"])
             with qa_tab:
                 chat_title = gr.Markdown(TRANSLATIONS[self.current_language]["chat_title"])
                 chat_placeholder = gr.Textbox(
@@ -130,10 +138,31 @@ class PDFProcessorUI:
                 summarize_btn = gr.Button(
                     TRANSLATIONS[self.current_language]["generate_summary"]
                 )
+                #set a collapsable container for the summaries of each fragment
+                with gr.Accordion(TRANSLATIONS[self.current_language]["mini_analysis_title"], open=False):
+                    minisummaries_output = gr.Textbox(
+                        label=TRANSLATIONS[self.current_language]["mini_analysis_title"],
+                        lines=10
+                    )
                 summary_output = gr.Textbox(
                     label=TRANSLATIONS[self.current_language]["summary_label"],
                     lines=10
                 )
+            
+            with specialist_tab:
+                specialist_title = gr.Markdown(TRANSLATIONS[self.current_language]["specialist_title"])
+                specialist_placeholder = gr.Textbox(
+                    label=TRANSLATIONS[self.current_language]["specialist_label"],
+                    lines=10
+                )
+                specialist_btn = gr.Button(TRANSLATIONS[self.current_language]["specialist_btn"])
+                with gr.Accordion(TRANSLATIONS[self.current_language]["mini_analysis_title"], open=False):
+                    minianalysis_output = gr.Textbox(
+                        label=TRANSLATIONS[self.current_language]["mini_analysis_title"],
+                        lines=10
+                    )
+                specialist_output = gr.Textbox(label=TRANSLATIONS[self.current_language]["specialist_output"], lines=20)
+
             
             language_dropdown.change(
                 fn=self.change_language,
@@ -147,11 +176,17 @@ class PDFProcessorUI:
                     process_output,
                     qa_tab,
                     summary_tab,
+                    specialist_tab,
+                    minisummaries_output,
+                    minianalysis_output,
                     chat_placeholder,
                     chat_title,
                     summarize_btn,
                     summary_output,
-                    ai_model_dropdown
+                    ai_model_dropdown,
+                    specialist_title,
+                    specialist_placeholder,
+                    specialist_output
                 ]
             )
 
@@ -182,7 +217,13 @@ class PDFProcessorUI:
             summarize_btn.click(
                 fn=self.summarize_interface,
                 inputs=[ai_model_dropdown, type_model, api_key_input, project_id_watsonx],
-                outputs=[summary_output]
+                outputs=[summary_output, minisummaries_output]
+            )
+
+            specialist_btn.click(
+                fn=self.specialist_opinion,
+                inputs=[ai_model_dropdown, type_model, api_key_input, project_id_watsonx, specialist_placeholder],
+                outputs=[specialist_output, minianalysis_output]
             )
         
         return demo

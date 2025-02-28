@@ -15,14 +15,20 @@ from utils import AI_MODELS, TRANSLATIONS
 import chromadb
 import requests
 import os
+from dotenv import load_dotenv
+
 OLLAMA_LLM = "granite3.1-dense"
 OLLAMA_EMBEDDINGS = "granite-embedding:278m"
 
 
+load_dotenv()
+
+api_key_watsonx = os.getenv('WATSONX_APIKEY')
+projectid_watsonx = os.getenv('WATSONX_PROJECT_ID')
 endpoint_watsonx = "https://us-south.ml.cloud.ibm.com"
 
-def set_up_watsonx(api_key, project_id_watsonx):
-    token_watsonx = authenticate_watsonx(api_key)
+def set_up_watsonx():
+    token_watsonx = authenticate_watsonx(api_key_watsonx)
     if token_watsonx == None:
         return None
     parameters = {
@@ -40,10 +46,10 @@ def set_up_watsonx(api_key, project_id_watsonx):
 
     credentials = Credentials(
         url = endpoint_watsonx,
-        api_key = api_key,
+        api_key = api_key_watsonx,
     )
 
-    client = APIClient(credentials, project_id=project_id_watsonx)
+    client = APIClient(credentials, project_id=projectid_watsonx)
 
     client.set_token(token_watsonx)
 
@@ -57,7 +63,7 @@ def set_up_watsonx(api_key, project_id_watsonx):
     watsonx_embedding = WatsonxEmbeddings(
         model_id="ibm/granite-embedding-278m-multilingual",
         url=endpoint_watsonx,
-        project_id=project_id_watsonx,
+        project_id=projectid_watsonx,
         params=embed_params,
     ) 
 
@@ -111,10 +117,21 @@ class PDFProcessor:
 
         elif ai_model == "IBM Granite3.1 dense / Ollama local":
             if type_model == "Local":
-                current_llm = OllamaLLM(model=OLLAMA_LLM)
-                embeding_model = OllamaEmbeddings(model=OLLAMA_EMBEDDINGS)
+                try:
+                    # Verificar que Ollama está funcionando y el modelo está disponible
+                    current_llm = OllamaLLM(model=OLLAMA_LLM)
+                    # Intenta hacer un embedding de prueba
+                    test_embedding = OllamaEmbeddings(model=OLLAMA_EMBEDDINGS)
+                    test_embedding.embed_query("test")
+                    embeding_model = test_embedding
+                except Exception as e:
+                    print(f"Error with Ollama: {e}")
+                    # Fallback a otro modelo o manejo de error
+                    raise Exception("Please ensure Ollama is running and the models are pulled: \n" +
+                                  f"ollama pull {OLLAMA_LLM}\n" +
+                                  f"ollama pull {OLLAMA_EMBEDDINGS}")
             else:
-                current_llm, embeding_model = set_up_watsonx(api_key, project_id_watsonx)
+                current_llm, embeding_model = set_up_watsonx()
         else: 
             current_llm = HuggingFaceEndpoint(
                 repo_id= AI_MODELS[ai_model],
@@ -128,21 +145,25 @@ class PDFProcessor:
 
     def process_pdf(self, pdf_file, chunk_size, chunk_overlap, ai_model, type_model, api_key, project_id_watsonx):
         print(ai_model, type_model, api_key, project_id_watsonx)
-        if (ai_model == "Open AI / GPT-4o-mini" and (api_key == "")) or (ai_model == "IBM Granite3.1 dense / Ollama local" and type_model == "Api Key" and (api_key == "" or project_id_watsonx == "")):
+        if (ai_model == "Open AI / GPT-4o-mini" and (api_key == "")) : #or (ai_model == "IBM Granite3.1 dense / Ollama local" and type_model == "Api Key" and (api_key == "" or project_id_watsonx == "")
             return TRANSLATIONS[self.language]["api_key_required"]
         if pdf_file is not None:
                 loader = PyPDFLoader(file_path=pdf_file.name)
                 documents = loader.load()
                 #delete empty page_content documents from documents
                 documents = [doc for doc in documents if doc.page_content]
-                print(documents) 
                 if(ai_model == "Open AI / GPT-4o-mini" or ai_model == "IBM Granite3.1 dense / Ollama local"):
-                    text_splitter = RecursiveCharacterTextSplitter(
-                        #is_separator_regex=True,
-                        #separators=["\n", "\n\n"],
-                        chunk_size=1000,
-                        chunk_overlap=100
-                    )
+                    if type_model == "Api Key":
+                        text_splitter = RecursiveCharacterTextSplitter(
+                            chunk_size=chunk_size,
+                            chunk_overlap=chunk_overlap,
+                            separators=["\n\n", "\n"] 
+                        )
+                    else:
+                        text_splitter = RecursiveCharacterTextSplitter(
+                            chunk_size=chunk_size,
+                            chunk_overlap=chunk_overlap,
+                        )
                 else: 
                     text_splitter = RecursiveCharacterTextSplitter(
                         chunk_size=chunk_size,
@@ -151,7 +172,6 @@ class PDFProcessor:
 
                 #print(text_splitter)
                 texts = text_splitter.split_documents(documents)
-                print(len(texts))
                 _, embeddings = self.set_llm(ai_model, type_model, api_key, project_id_watsonx)
                 
                 new_client = chromadb.EphemeralClient()
@@ -164,7 +184,7 @@ class PDFProcessor:
                     #persist_directory="./chroma_db"
                 )
                 
-                return TRANSLATIONS[self.language]["pdf_processed"]
+                return TRANSLATIONS[self.language]["pdf_processed"] + f" ---- Chunks: {len(self.vectorstore.get()["documents"])}"
                 """ else:
                 device = "cpu"
                 model = AutoModelForImageTextToText.from_pretrained("stepfun-ai/GOT-OCR-2.0-hf", device_map=device)
@@ -216,9 +236,8 @@ class PDFProcessor:
         page_labels_text = "\n".join([f"Page: {page}" for page in sorted(unique_page_labels)])
 
         return result["result"] + "\n\nSources: " + page_labels_text
-
-    def get_summary(self, ai_model, type_model, api_key, project_id_watsonx):
-        """Generates a summary of the entire document by summarizing each retrieved chunk individually."""
+    
+    def create_summary(self, ai_model, type_model, api_key, project_id_watsonx, mini_summary_prompt, final_summary_prompt, specialist_prompt=None):
         if not self.vectorstore:
             return TRANSLATIONS[self.language]["load_pdf_first"]
             
@@ -232,30 +251,20 @@ class PDFProcessor:
             
         summaries = []
         
-        summary_prompt = PromptTemplate(
-            input_variables=["text"],
-            template="""
-            Extract all key points from the following text:
-            {text}
-
-            Remember not to mention anything that is not in the text.
-            Do not extend information that is not provided in the text.
-            The summary must be in {language}.
-            """
-        )
-        
-        summary_chain = summary_prompt | current_llm
+        summary_chain = mini_summary_prompt | current_llm
         
         # Process each document to create individual summaries
         for i, doc_content in enumerate(documents["documents"]):
             print(i)
-            if doc_content:  # Check if document content exists
+            if doc_content:  
                 #metadata = documents["metadatas"][i] if "metadatas" in documents and i < len(documents["metadatas"]) else {}
                 #doc_id = documents["ids"][i] if "ids" in documents and i < len(documents["ids"]) else f"doc_{i}"
-                
-                chunk_summary = summary_chain.invoke({"text": doc_content,"language": self.language})
+                if specialist_prompt is not None:
+                    chunk_summary = summary_chain.invoke({"text": doc_content,"language": self.language, "specialist_prompt": specialist_prompt})
+                else:
+                    chunk_summary = summary_chain.invoke({"text": doc_content,"language": self.language})
                 summaries.append(f"Summary fragment{i}: {chunk_summary}")
-                print(f"fragment{i}: {doc_content}")
+                print(f"fragment{i}: {chunk_summary}")
         
         print(f"Summaries generated: {len(summaries)}")
         
@@ -263,19 +272,110 @@ class PDFProcessor:
         if not summaries:
             return TRANSLATIONS[self.language]["no_summaries_generated"]
         
-        final_summary_prompt = PromptTemplate(
-            input_variables=["summaries", "language"],
-            template="""
-            Combine the following summaries into a final concise summary of between 2 and 4 paragraphs:
-            {summaries}
+        final_summary=  "\n".join(summaries)
+        """ final_summary_chain = final_summary_prompt | current_llm
+        if specialist_prompt is not None:
+            final_summary = final_summary_chain.invoke({"summaries": "\n".join(summaries), "language": self.language, "specialist_prompt": specialist_prompt})
+        else:
+            final_summary = final_summary_chain.invoke({"summaries": "\n".join(summaries), "language": self.language}) """
+        
+        return final_summary,final_summary
+        
 
-            Remember not to mention anything that is not in the text.
-            Do not extend information that is not provided in the text.
+    def summarizer_by_k_top_n(self, ai_model, type_model, api_key, project_id_watsonx, k, summary_prompt):
+        if not self.vectorstore:
+            return TRANSLATIONS[self.language]["load_pdf_first"]
+        
+        current_llm, _ = self.set_llm(ai_model, type_model, api_key, project_id_watsonx)
+        # Get all documents from the vectorstore
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": k})
+        documents = retriever.invoke('Summary of the document and key points')
+
+        print(len(documents))
+        
+        summary_chain = summary_prompt | current_llm
+        final_summary = summary_chain.invoke({"texts": "\n".join([doc.page_content for doc in documents])})
+        return final_summary, final_summary
+
+        # Get the top k documents by score
+    def get_summary(self, ai_model, type_model, api_key, project_id_watsonx):
+        summary_prompt = PromptTemplate(
+            input_variables=["text", "language"],
+            template="""
+            Extract the key points from the following text:
+            ------------
+            {text}
+            ------------
+            Ensure the summary is extended and captures all the information.
+            Do not include details that are not explicitly stated in the text.
+            Avoid adding interpretations, assumptions, or external knowledge.
             The summary must be in {language}.
             """
         )
+
+        final_summary_prompt = PromptTemplate(
+            input_variables=["summaries", "language"],
+            template="""
+            Combine the following texts into a cohesive and structured final summary:   
+            ------------
+            {texts}
+            ------------
+            The final summary should be between 2 and 4 paragraphs.
+            Preserve the original meaning without adding external information or interpretations.
+            Ensure clarity, logical flow, and coherence between the combined points.
+            """
+        )
         
-        final_summary_chain = final_summary_prompt | current_llm
-        final_summary = final_summary_chain.invoke({"summaries": "\n".join(summaries), "language": self.language})
+        return self.summarizer_by_k_top_n(ai_model, type_model, api_key, project_id_watsonx, 15, final_summary_prompt)
+    
+    """ Actúa como un abogado altamente experimentado en derecho civil y contractual.
+
+    Examina si existen cláusulas abusivas, desproporcionadas o contrarias a la normativa vigente, y explícitalas con claridad.
+    Basa tu análisis en principios relevantes del derecho civil y contractual.
+    Ofrece un argumento estructurado y recomendaciones prácticas.
+    Si hay múltiples interpretaciones posibles, preséntalas de manera objetiva.
+    Mantén un tono profesional, preciso y fundamentado.
+
+    Basado en lo que analices, proporciona una evaluación legal detallada """
+
+    def get_specialist_opinion(self, ai_model, type_model, api_key, project_id_watsonx, specialist_prompt):
+        summary_prompt = PromptTemplate(
+            input_variables=["text", "language", "specialist_prompt"],
+            template="""
+            * Act as a specialist based on the following instructions and behaviour that you will follow:
+            ------------
+            {specialist_prompt}
+            ------------
+            * Ensure the analysis is concise and captures the main information.
+            * Do not include details that are not explicitly stated in the text.
+            * Avoid adding assumptions or external knowledge.
+            * The analysis must be in {language}.
+            * Be concise and to the point.
+            * The specialist will extract the key points from the following text:
+            ------------
+            {text}
+            ------------
+            """
+        )
+
+        final_summary_prompt = PromptTemplate(
+            input_variables=["summaries", "language", "specialist_prompt"],
+            template="""
+            * Act as a specialist based on the following instructions and behaviour that you will follow:
+            ------------
+            {specialist_prompt}
+            ------------
+            * Combine the following analysis into a cohesive and structured final analysis:   
+            ------------
+            {summaries}
+            ------------
+            * Preserve the original meaning without adding external information or interpretations.
+            * Ensure clarity, logical flow, and coherence between the combined points.
+            * The analysis must be in {language}.
+            """
+        )
         
-        return final_summary
+        return self.create_summary(ai_model, type_model, api_key, project_id_watsonx, summary_prompt, final_summary_prompt, specialist_prompt)
+    
+    
+    
