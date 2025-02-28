@@ -1,3 +1,4 @@
+import json
 import tempfile
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -40,7 +41,7 @@ def set_up_watsonx():
     }
 
     embed_params = {
-        EmbedTextParamsMetaNames.TRUNCATE_INPUT_TOKENS: 3,
+        EmbedTextParamsMetaNames.TRUNCATE_INPUT_TOKENS: 1,
         EmbedTextParamsMetaNames.RETURN_OPTIONS: {"input_text": True},
     }
 
@@ -144,7 +145,8 @@ class PDFProcessor:
     
 
     def process_pdf(self, pdf_file, chunk_size, chunk_overlap, ai_model, type_model, api_key, project_id_watsonx):
-        print(ai_model, type_model, api_key, project_id_watsonx)
+        defined_chunk_size = 1000
+        defined_chunk_overlap = 100
         if (ai_model == "Open AI / GPT-4o-mini" and (api_key == "")) : #or (ai_model == "IBM Granite3.1 dense / Ollama local" and type_model == "Api Key" and (api_key == "" or project_id_watsonx == "")
             return TRANSLATIONS[self.language]["api_key_required"]
         if pdf_file is not None:
@@ -155,24 +157,28 @@ class PDFProcessor:
                 if(ai_model == "Open AI / GPT-4o-mini" or ai_model == "IBM Granite3.1 dense / Ollama local"):
                     if type_model == "Api Key":
                         text_splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=chunk_size,
-                            chunk_overlap=chunk_overlap,
+                            chunk_size=defined_chunk_size,
+                            chunk_overlap=defined_chunk_overlap,
                             separators=["\n\n", "\n"] 
                         )
                     else:
                         text_splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=chunk_size,
-                            chunk_overlap=chunk_overlap,
+                            chunk_size=defined_chunk_size,
+                            chunk_overlap=defined_chunk_overlap,
                         )
                 else: 
                     text_splitter = RecursiveCharacterTextSplitter(
-                        chunk_size=chunk_size,
-                        chunk_overlap=chunk_overlap
+                        chunk_size=defined_chunk_size,
+                        chunk_overlap=defined_chunk_overlap
                     )
 
                 #print(text_splitter)
                 texts = text_splitter.split_documents(documents)
                 _, embeddings = self.set_llm(ai_model, type_model, api_key, project_id_watsonx)
+
+                #delete all documents from the vectorstore
+                if self.vectorstore:
+                    self.vectorstore.delete_collection()
                 
                 new_client = chromadb.EphemeralClient()
                 
@@ -185,104 +191,36 @@ class PDFProcessor:
                 )
                 
                 return TRANSLATIONS[self.language]["pdf_processed"] + f" ---- Chunks: {len(self.vectorstore.get()["documents"])}"
-                """ else:
-                device = "cpu"
-                model = AutoModelForImageTextToText.from_pretrained("stepfun-ai/GOT-OCR-2.0-hf", device_map=device)
-                processor = AutoProcessor.from_pretrained("stepfun-ai/GOT-OCR-2.0-hf")
-
-                inputs = processor(image_file.name, return_tensors="pt", format=True).to(device)
-
-                generate_ids = model.generate(
-                    **inputs,
-                    do_sample=False,
-                    tokenizer=processor.tokenizer,
-                    stop_strings="<|im_end|>",
-                    max_new_tokens=4096,
-                    repetition_penalty=1.5,        # Penalize repeated tokens
-                    no_repeat_ngram_size=3,        # Prevent repeating of 3-grams
-                    early_stopping=True,           # Stop generation when criteria met
-                    num_beams=4,                   # Use beam search for better results
-                    length_penalty=1.0, 
-                )
-
-                res=processor.decode(generate_ids[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True)
-                print(res)
-
-                render_ocr_text(res, "output.html", format_text=True) """
         
         else:
             return TRANSLATIONS[self.language]["load_pdf_first"]
         
 
-    def get_qa_response(self, message, history, ai_model, type_model, api_key, project_id_watsonx):
+    def get_qa_response(self, message, history, ai_model, type_model, api_key, project_id_watsonx, k=4):
         current_llm, _ = self.set_llm(ai_model, type_model, api_key, project_id_watsonx)
 
         if not self.vectorstore:
             return TRANSLATIONS[self.language]["load_pdf_first"]
         
-        retriever = self.vectorstore.as_retriever()
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": k})
 
         qa_chain = RetrievalQA.from_chain_type(
             llm=current_llm,
             chain_type="stuff",
             retriever=retriever,
-            return_source_documents=True
+            return_source_documents=True,
         )
         
-        result = qa_chain.invoke({"query": f"{message}.\n answer it in {self.language}. Remember not to mention anything that is not in the text. Do not extend information that is not provided in the text. "})
+        result = qa_chain.invoke({"query": f"{message}.\n You must answer it in {self.language}. Remember not to mention anything that is not in the text. Do not extend information that is not provided in the text. "})
 
         unique_page_labels = {doc.metadata['page_label'] for doc in result["source_documents"]}
         
-        page_labels_text = "\n".join([f"Page: {page}" for page in sorted(unique_page_labels)])
+        page_labels_text = " & ".join([f"Page: {page}" for page in sorted(unique_page_labels)])
 
         return result["result"] + "\n\nSources: " + page_labels_text
-    
-    def create_summary(self, ai_model, type_model, api_key, project_id_watsonx, mini_summary_prompt, final_summary_prompt, specialist_prompt=None):
-        if not self.vectorstore:
-            return TRANSLATIONS[self.language]["load_pdf_first"]
-            
-        # Get all documents from the vectorstore
-        documents = self.vectorstore.get()
-        
-        current_llm, _ = self.set_llm(ai_model, type_model, api_key, project_id_watsonx)
-        # Check if we have documents to summarize
-        if not documents or "documents" not in documents or not documents["documents"]:
-            return TRANSLATIONS[self.language]["no_documents_to_summarize"]
-            
-        summaries = []
-        
-        summary_chain = mini_summary_prompt | current_llm
-        
-        # Process each document to create individual summaries
-        for i, doc_content in enumerate(documents["documents"]):
-            print(i)
-            if doc_content:  
-                #metadata = documents["metadatas"][i] if "metadatas" in documents and i < len(documents["metadatas"]) else {}
-                #doc_id = documents["ids"][i] if "ids" in documents and i < len(documents["ids"]) else f"doc_{i}"
-                if specialist_prompt is not None:
-                    chunk_summary = summary_chain.invoke({"text": doc_content,"language": self.language, "specialist_prompt": specialist_prompt})
-                else:
-                    chunk_summary = summary_chain.invoke({"text": doc_content,"language": self.language})
-                summaries.append(f"Summary fragment{i}: {chunk_summary}")
-                print(f"fragment{i}: {chunk_summary}")
-        
-        print(f"Summaries generated: {len(summaries)}")
-        
-        # If no summaries were generated, return a message
-        if not summaries:
-            return TRANSLATIONS[self.language]["no_summaries_generated"]
-        
-        final_summary=  "\n".join(summaries)
-        """ final_summary_chain = final_summary_prompt | current_llm
-        if specialist_prompt is not None:
-            final_summary = final_summary_chain.invoke({"summaries": "\n".join(summaries), "language": self.language, "specialist_prompt": specialist_prompt})
-        else:
-            final_summary = final_summary_chain.invoke({"summaries": "\n".join(summaries), "language": self.language}) """
-        
-        return final_summary,final_summary
         
 
-    def summarizer_by_k_top_n(self, ai_model, type_model, api_key, project_id_watsonx, k, summary_prompt):
+    def summarizer_by_k_top_n(self, ai_model, type_model, api_key, project_id_watsonx, k, summary_prompt, just_get_documments=False):
         if not self.vectorstore:
             return TRANSLATIONS[self.language]["load_pdf_first"]
         
@@ -291,30 +229,18 @@ class PDFProcessor:
         retriever = self.vectorstore.as_retriever(search_kwargs={"k": k})
         documents = retriever.invoke('Summary of the document and key points')
 
-        print(len(documents))
+        if just_get_documments:
+            return  "\n".join([doc.page_content for doc in documents])
         
         summary_chain = summary_prompt | current_llm
-        final_summary = summary_chain.invoke({"texts": "\n".join([doc.page_content for doc in documents])})
-        return final_summary, final_summary
+        final_summary = summary_chain.invoke({"texts": "\n".join([doc.page_content for doc in documents]), "language": self.language})
+        return final_summary
 
         # Get the top k documents by score
-    def get_summary(self, ai_model, type_model, api_key, project_id_watsonx):
-        summary_prompt = PromptTemplate(
-            input_variables=["text", "language"],
-            template="""
-            Extract the key points from the following text:
-            ------------
-            {text}
-            ------------
-            Ensure the summary is extended and captures all the information.
-            Do not include details that are not explicitly stated in the text.
-            Avoid adding interpretations, assumptions, or external knowledge.
-            The summary must be in {language}.
-            """
-        )
+    def get_summary(self, ai_model, type_model, api_key, project_id_watsonx, just_get_documments=False, k=10):
 
         final_summary_prompt = PromptTemplate(
-            input_variables=["summaries", "language"],
+            input_variables=["texts", "language"],
             template="""
             Combine the following texts into a cohesive and structured final summary:   
             ------------
@@ -323,14 +249,91 @@ class PDFProcessor:
             The final summary should be between 2 and 4 paragraphs.
             Preserve the original meaning without adding external information or interpretations.
             Ensure clarity, logical flow, and coherence between the combined points.
+            The summary must be in {language}.
             """
         )
         
-        return self.summarizer_by_k_top_n(ai_model, type_model, api_key, project_id_watsonx, 15, final_summary_prompt)
+        return self.summarizer_by_k_top_n(ai_model, type_model, api_key, project_id_watsonx, k, final_summary_prompt, just_get_documments)
+    
+    
+
+    def get_specialist_opinion(self, ai_model, type_model, api_key, project_id_watsonx, specialist_prompt):
+        questions_prompt = PromptTemplate(
+            input_variables=["text", "specialist_prompt", "language"],
+            template="""
+            * Act as a specialist based on the following instructions and behaviour that you will follow:
+            ------------
+            {specialist_prompt}
+            ------------
+            * Based on your role as specialist, create some different sintetized and concise aspects to ask to the knowledge base of the document about the following text:
+            ------------
+            {text}
+            ------------
+            * The key aspects and questions must be provided in JSON format with the following structure:
+            {{
+                "aspects": [
+                    "Aspect 1",
+                    "Aspect 2",
+                    "Aspect 3",
+                    "Aspect 4",
+                    "Aspect 5",
+                    "Aspect 6",
+                    "Aspect 7",
+                    "Aspect 8",
+                    "Aspect 9",
+                    "Aspect 10",
+                ]
+            }}
+            ------------
+            *Example of valid output:
+            {{
+                "aspects": [
+                    "Finished date of the project",
+                    "Payment of the project",
+                    "Project extension"
+                    ]
+            }}
+            ------------
+            * The aspects must be redacted in the language of {language}.
+            * The given structure must be followed strictly in front of the keys, just use the list of aspects, do not add any other key.
+            * Generate until 10 different aspects.
+            ------------
+            Answer: 
+            """
+        )
+        if not self.vectorstore:
+            return TRANSLATIONS[self.language]["load_pdf_first"]
+        
+        current_llm, _ = self.set_llm(ai_model, type_model, api_key, project_id_watsonx)
+
+        summary_text = self.get_summary(ai_model, type_model, api_key, project_id_watsonx, True, 10)
+        questions_chain = questions_prompt | current_llm
+        questions = questions_chain.invoke({"text": summary_text, "specialist_prompt": specialist_prompt, "language": self.language})
+
+        print(questions)
+
+        #clean the questions variable, delete all the text before the json and after the json
+        questions = questions.split("{")[1]
+        questions = questions.split("}")[0]
+        questions = questions.strip()
+        print(questions)
+        questions = json.loads(questions)
+
+        print(questions)
+
+        if len(questions["aspects"]) > 15:
+            questions["aspects"] = questions["aspects"][:15]
+        else:
+            questions["aspects"] = questions["aspects"]
+
+        aspects_text = "\n".join([f"* {aspect}: {self.get_qa_response(aspect, [], ai_model, type_model, api_key, project_id_watsonx, 2)}" for aspect in questions["aspects"]])
+
+        return aspects_text
+    
     
     """ Actúa como un abogado altamente experimentado en derecho civil y contractual.
 
-    Examina si existen cláusulas abusivas, desproporcionadas o contrarias a la normativa vigente, y explícitalas con claridad.
+    Examina si existen cláusulas abusivas, desproporcionadas o contrarias a la normativa vigente, y explícalas con claridad.
     Basa tu análisis en principios relevantes del derecho civil y contractual.
     Ofrece un argumento estructurado y recomendaciones prácticas.
     Si hay múltiples interpretaciones posibles, preséntalas de manera objetiva.
@@ -338,44 +341,13 @@ class PDFProcessor:
 
     Basado en lo que analices, proporciona una evaluación legal detallada """
 
-    def get_specialist_opinion(self, ai_model, type_model, api_key, project_id_watsonx, specialist_prompt):
-        summary_prompt = PromptTemplate(
-            input_variables=["text", "language", "specialist_prompt"],
-            template="""
-            * Act as a specialist based on the following instructions and behaviour that you will follow:
-            ------------
-            {specialist_prompt}
-            ------------
-            * Ensure the analysis is concise and captures the main information.
-            * Do not include details that are not explicitly stated in the text.
-            * Avoid adding assumptions or external knowledge.
-            * The analysis must be in {language}.
-            * Be concise and to the point.
-            * The specialist will extract the key points from the following text:
-            ------------
-            {text}
-            ------------
-            """
-        )
-
-        final_summary_prompt = PromptTemplate(
-            input_variables=["summaries", "language", "specialist_prompt"],
-            template="""
-            * Act as a specialist based on the following instructions and behaviour that you will follow:
-            ------------
-            {specialist_prompt}
-            ------------
-            * Combine the following analysis into a cohesive and structured final analysis:   
-            ------------
-            {summaries}
-            ------------
-            * Preserve the original meaning without adding external information or interpretations.
-            * Ensure clarity, logical flow, and coherence between the combined points.
-            * The analysis must be in {language}.
-            """
-        )
-        
-        return self.create_summary(ai_model, type_model, api_key, project_id_watsonx, summary_prompt, final_summary_prompt, specialist_prompt)
+    """ Actúa como un asesor e ingeniero financiero experto en lectura de reportes y análisis de datos.
     
+    Basado en los datos y conclusiones del reporte, proporciona una evaluación financiera detallada y posibles escenarios tanto negativos como positivos que se puedan presentar.
+    Establece el riesgo que se corre en cada escenario, la probabilidad de ocurrencia de cada uno y la magnitud del impacto en el recurso.
+    Si hay múltiples interpretaciones posibles, preséntalas de manera objetiva.
+    Realiza una hipótesis que pronostique el futuro de la situación o recurso analizado, teniendo en cuenta los datos y conclusiones del reporte.
+    Presenta tus hipotesis en 3 aspectos, corto, mediano y largo plazo.
+    Mantén un tono profesional, preciso y fundamentado.
     
-    
+    Basado en lo que analices, proporciona una evaluación en detalle sobre los activos, reportes y/o recursos que se analizaron"""
